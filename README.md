@@ -8,6 +8,7 @@ The script will connect to a given OAuth2 token endpoint and request an OAuth2 t
 
 Arguments
 ---------
+```
 -c|--client: client_id (default $client_id)
 -s|--secret: client_secret (default $client_secret)
 -u|--user: username (default $username)
@@ -17,6 +18,7 @@ Arguments
 -f|--file: File to use for curl inputs
 -q|--quit: Enter q to quit instead of blank line
 -h|--help: Display this help message
+```
 
 Requrements
 -----------
