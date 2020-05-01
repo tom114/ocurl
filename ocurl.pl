@@ -12,9 +12,13 @@ my $client_id="testClient";
 my $client_secret="testClientSecret";
 my $username="admin";
 my $password="password1";
-my $token_url="http://localhost:8080/oauth/token";
+my $token_url="http://localhost:8080/api/oauth/token";
+my $quit=undef;
 my $token = undef;
 my $help = undef;
+my $verbose = 0;
+my $readpw = 0;
+my $file;
 
 Getopt::Long::Configure ('bundling');
 GetOptions(
@@ -22,8 +26,12 @@ GetOptions(
 	's|secret=s'=>\$client_secret,
 	'u|user=s'=>\$username,
 	'p|password=s'=>\$password,
+	'r|rp'=>\$readpw,
 	't|tokenURL=s'=>\$token_url,
 	'k|token=s'=>\$token,
+	'f|file=s'=>\$file,
+	'v|verbose'=>\$verbose,
+	'q|quit'=>\$quit,
 	'h|help'=>\$help
 );
 
@@ -35,33 +43,87 @@ Arguments:
 -s|--secret: client_secret (default $client_secret)
 -u|--user: username (default $username)
 -p|--password: password (default $password)
+-r|--rp: read password in application
 -t|--tokenURL: token_url (default $token_url)
 -k|--token: OAuth2 token to use (optional)
+-f|--file: File to use for curl inputs
+-q|--quit: Enter q to quit instead of blank line
 -h|--help: Display this help message
 USAGE
 	exit(0);
 }
 
+if($file){
+	open(FILE, $file) or die "Cannot read file: $!";
+}
+
+my $term = Term::ReadLine->new('OAuth2 Curl manager');
+
+if($readpw){
+	$password = $term->readline("Enter Password :");
+}
+
 if(!defined $token){
 	$token = getToken($client_id,$client_secret,$username,$password,$token_url);
-	print "Got token: $token\n";
 }
 else{
 	print "Using token: $token\n";
 }
 
-my $header = "Authorization: Bearer $token";
+my $cmd_base = setHeader($token);
 print "Enter URL or any other CURL parameters:\n";
 
-my $cmd_base = "curl -H \"$header\" ";
-my $term = Term::ReadLine->new('Simple Perl calc');
+if($token_url =~ /^(.*)\/oauth\/token/){
+	$term->addhistory($1);
+}
+else{
+	$term->addhistory("http://localhost:8080");
+}
+
 my $prompt = "curl ";
-while(my $line = $term->readline($prompt)){
-	if('q' eq lc $line || 'exit' eq lc $line){
-		last;
+while(1){
+	my $line;
+	if(!$file){
+		$line = $term->readline($prompt);
 	}
-	my $cmd = "$cmd_base $line";
-	system($cmd);
+	else{
+		$line = <FILE>;
+		chomp $line;
+	}
+
+	if($line){
+		if('q' eq lc $line || 'exit' eq lc $line){
+			last;
+		}
+		elsif('t' eq lc $line || 'token' eq lc $line){
+			$token = getToken($client_id,$client_secret,$username,$password,$token_url);
+			$cmd_base = setHeader($token);
+		}
+		else{
+			my $cmd = "$cmd_base $line";
+			system($cmd);
+			print "\n";
+		}
+	}
+	else{
+		if($quit){
+			print "Type 'q' to exit\n";
+		}
+		else{
+			last;
+		}
+	}
+}
+
+print "\n";
+
+sub setHeader{
+	my $token = shift;
+
+	my $header = "Authorization: Bearer $token";
+	my $cmd_base = "curl -H \"$header\" ";
+
+	return $cmd_base;
 }
 
 sub getToken{
@@ -80,9 +142,16 @@ sub getToken{
 
 	if(!defined $token){
                 print "Couldn't get OAuth token: " . $client->last_response->status_line . "\n";
+		print $client->last_response->as_string if $verbose;
                 exit(1);
         }
         my $tokenstr = $token->access_token;
+	
+	print "Got token: $tokenstr\n";
+
+	if(defined $token->refresh_token){
+		print "Refresh token: ".$token->refresh_token."\n";
+	}
         
         return $tokenstr;
 	
